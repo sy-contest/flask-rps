@@ -71,8 +71,9 @@
         }
         #musicControls {
             position: absolute;
-            top: 10px;
+            top: 50%;
             right: 10px;
+            transform: translateY(-50%);
             z-index: 1000;
         }
         #scores {
@@ -356,9 +357,6 @@
     </script>
 </head>
 <body>
-    <div id="musicControls">
-        <button id="musicToggle" onclick="toggleMusic()">Play Music</button>
-    </div>
     <div class="game-container">
         <div id="timer-container">
             <div id="timer-bar"></div>
@@ -374,6 +372,9 @@
                     <button onclick="makeMove('scissors')">Scissors</button>
                 </div>
             </div>
+        </div>
+        <div id="musicControls">
+            <button id="musicToggle" onclick="toggleMusic()">Play Music</button>
         </div>
         <div class="divider"></div>
         <div class="player-area" id="player2-area">
