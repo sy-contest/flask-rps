@@ -63,6 +63,52 @@
             background-color: rgba(255,255,255,0.1);
             margin-bottom: 10px;
         }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .modal h2 {
+            color: #8B89E6;
+            margin-top: 0;
+        }
+        .modal-buttons {
+            margin-top: 20px;
+        }
+        .modal-button {
+            background-color: #8B89E6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 0 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .modal-button:hover {
+            background-color: #7A78D1;
+        }
+        .modal-button.cancel {
+            background-color: #ccc;
+        }
+        .modal-button.cancel:hover {
+            background-color: #bbb;
+        }
     </style>
     <script type="text/javascript" charset="utf-8">
         var socket = io();
@@ -72,6 +118,7 @@
         var bgMusic;
         var musicInitialized = false;
         var playerChoice = null;
+        var tempChoice = null;
 
         socket.on('connect', function() {
             socket.emit('join', {username: currentPlayer, room: '{{ room }}'});
@@ -118,11 +165,19 @@
                 return;
             }
 
-            if (confirm(`Are you sure you want to choose ${choice}?`)) {
-                playerChoice = choice;
-                socket.emit('make_move', {username: currentPlayer, room: '{{ room }}', choice: choice});
-                updateButtons(choice);
-            }
+            tempChoice = choice;
+            document.getElementById('choiceConfirmation').textContent = choice;
+            document.getElementById('confirmModal').style.display = 'block';
+        }
+        function confirmChoice() {
+            playerChoice = tempChoice;
+            socket.emit('make_move', {username: currentPlayer, room: '{{ room }}', choice: playerChoice});
+            updateButtons(playerChoice);
+            closeModal();
+        }
+        function closeModal() {
+            document.getElementById('confirmModal').style.display = 'none';
+            tempChoice = null;
         }
         function updatePlayerAreas() {
             document.getElementById('player1-name').innerText = currentPlayer;
@@ -240,5 +295,15 @@
     </div>
     <div id="status" style="position: absolute; top: 10px; left: 10px;">Waiting for another player...</div>
     <div id="result" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);"></div>
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <h2>Confirm Your Choice</h2>
+            <p>Are you sure you want to choose <span id="choiceConfirmation"></span>?</p>
+            <div class="modal-buttons">
+                <button class="modal-button" onclick="confirmChoice()">Yes</button>
+                <button class="modal-button cancel" onclick="closeModal()">No</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
