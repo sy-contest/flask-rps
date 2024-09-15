@@ -44,12 +44,40 @@ def on_move(data):
     choice = data['choice']
     games[room]['choices'][username] = choice
     if len(games[room]['choices']) == 2:
-        result = determine_winner(games[room]['choices'])
-        update_scores(room, result)
+        process_round(room)
+    elif len(games[room]['choices']) == 1 and games[room].get('timer_ended', False):
+        process_round(room)
+
+@socketio.on('no_choice')
+def on_no_choice(data):
+    username = data['username']
+    room = data['room']
+    games[room]['timer_ended'] = True
+    if len(games[room]['choices']) == 1:
+        process_round(room)
+    elif len(games[room]['choices']) == 0:
+        result = {'result': 'Tie! No one made a choice.', 'choices': {}, 'winner': None}
         emit('game_result', result, room=room)
         emit('update_scores', games[room]['scores'], room=room)
         games[room]['choices'] = {}
-        check_game_end(room)
+        games[room]['timer_ended'] = False
+        if not check_game_end(room):
+            socketio.emit('start_round', room=room)
+
+def process_round(room):
+    if len(games[room]['choices']) == 2:
+        result = determine_winner(games[room]['choices'])
+    else:
+        player_who_chose = list(games[room]['choices'].keys())[0]
+        result = {'result': f'{player_who_chose} wins! The other player didn\'t choose.', 'choices': games[room]['choices'], 'winner': player_who_chose}
+    
+    update_scores(room, result)
+    emit('game_result', result, room=room)
+    emit('update_scores', games[room]['scores'], room=room)
+    games[room]['choices'] = {}
+    games[room]['timer_ended'] = False
+    if not check_game_end(room):
+        socketio.emit('start_round', room=room)
 
 def determine_winner(choices):
     players = list(choices.keys())
@@ -73,6 +101,8 @@ def check_game_end(room):
             emit('game_over', {'winner': player}, room=room)
             games[room]['scores'] = {p: 0 for p in games[room]['scores']}
             emit('update_scores', games[room]['scores'], room=room)
+            return True
+    return False
 
 @app.route('/static/<path:path>')
 def send_static(path):
