@@ -178,6 +178,7 @@
         var timerInterval;
         var earnPointSound;
         var losePointSound;
+        var sfxMuted = false;
 
         socket.on('connect', function() {
             socket.emit('join', {username: currentPlayer, room: '{{ room }}'});
@@ -213,9 +214,13 @@
                     if (scores[player] > lastScores[player]) {
                         if (player === currentPlayer) {
                             shootConfetti();
-                            earnPointSound.play();
+                            if (!sfxMuted) {
+                                earnPointSound.play();
+                            }
                         } else {
-                            losePointSound.play();
+                            if (!sfxMuted) {
+                                losePointSound.play();
+                            }
                         }
                     }
                 }
@@ -334,6 +339,17 @@
             document.getElementById('musicToggle').textContent = (bgMusic && !bgMusic.paused) ? 'Pause Music' : 'Play Music';
         }
 
+        function toggleSFX() {
+            sfxMuted = !sfxMuted;
+            earnPointSound.muted = sfxMuted;
+            losePointSound.muted = sfxMuted;
+            updateSFXButton();
+        }
+
+        function updateSFXButton() {
+            document.getElementById('sfxToggle').textContent = sfxMuted ? 'Unmute SFX' : 'Mute SFX';
+        }
+
         function updateButtons(selectedChoice) {
             const buttons = document.querySelectorAll('#game_buttons button');
             buttons.forEach(button => {
@@ -359,6 +375,7 @@
         window.onload = function() {
             initAudio(); // This will now initialize all audio elements
             updateMusicButton();
+            updateSFXButton();
             // ... (any other onload functions you might have)
         };
 
@@ -384,6 +401,7 @@
         </div>
         <div id="musicControls">
             <button id="musicToggle" onclick="toggleMusic()">Play Music</button>
+            <button id="sfxToggle" onclick="toggleSFX()">Mute SFX</button>
         </div>
         <div class="divider"></div>
         <div class="player-area" id="player2-area">
