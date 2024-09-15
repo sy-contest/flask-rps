@@ -3,6 +3,7 @@
 <html>
 <head>
     <title>Rock Paper Scissors Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <style>
@@ -12,14 +13,16 @@
             color: white;
             margin: 0;
             padding: 0;
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
         .game-container {
             display: flex;
             flex-direction: column;
-            height: 100%;
+            flex-grow: 1;
+            padding-left: 0; /* Remove left padding */
+            padding-right: 0; /* Remove right padding */
         }
         .player-area {
             flex: 1;
@@ -29,8 +32,16 @@
             padding: 20px;
         }
         .divider {
-            height: 5px;
+            height: 10px;
             background-color: #8B89E6;
+            width: 100%; /* Changed from 80% to 100% */
+            margin: 0; /* Removed auto margin */
+            font-weight: 700;
+            line-height: 2.5rem;
+            font-size: 0.225rem;
+            font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+            position: relative;
+            overflow: hidden;
         }
         .player-content {
             background-color: rgba(255,255,255,0.1);
@@ -38,6 +49,8 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             text-align: center;
+            width: 100%;
+            max-width: 300px;
         }
         button {
             background-color: #8B89E6;
@@ -47,9 +60,12 @@
             margin: 5px;
             cursor: pointer;
             border-radius: 5px;
+            font-size: 1rem;
         }
         #status, #result {
             margin-bottom: 15px;
+            text-align: center;
+            padding: 10px;
         }
         #musicControls {
             position: absolute;
@@ -78,7 +94,8 @@
             margin: 15% auto;
             padding: 20px;
             border: 1px solid #888;
-            width: 300px;
+            width: 80%;
+            max-width: 300px;
             border-radius: 10px;
             text-align: center;
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
@@ -108,6 +125,18 @@
         }
         .modal-button.cancel:hover {
             background-color: #bbb;
+        }
+        @media (max-width: 768px) {
+            .player-content {
+                padding: 10px;
+            }
+            button {
+                font-size: 0.9rem;
+                padding: 8px 16px;
+            }
+            #status, #result {
+                font-size: 0.9rem;
+            }
         }
     </style>
     <script type="text/javascript" charset="utf-8">
