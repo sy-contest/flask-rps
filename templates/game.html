@@ -1,0 +1,209 @@
+<!-- game.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rock Paper Scissors Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <style>
+        body {
+            background-color: #9999FF;
+            font-family: Arial, sans-serif;
+            color: white;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .player-area {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .divider {
+            height: 5px;
+            background-color: #8B89E6;
+        }
+        .player-content {
+            background-color: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        button {
+            background-color: #8B89E6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #status, #result {
+            margin-bottom: 15px;
+        }
+        #musicControls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+        }
+        #scores {
+            text-align: center;
+            padding: 10px;
+            background-color: rgba(255,255,255,0.1);
+            margin-bottom: 10px;
+        }
+    </style>
+    <script type="text/javascript" charset="utf-8">
+        var socket = io();
+        var currentPlayer = '{{ username }}';
+        var opponent = '';
+        var lastScores = {};
+        var bgMusic;
+        var musicInitialized = false;
+
+        socket.on('connect', function() {
+            socket.emit('join', {username: currentPlayer, room: '{{ room }}'});
+        });
+        socket.on('status', function(data) {
+            document.getElementById('status').innerHTML = data.msg;
+        });
+        socket.on('room_full', function() {
+            alert('This room is full. Please choose another room.');
+            window.location.href = '/';
+        });
+        socket.on('start_game', function(data) {
+            document.getElementById('status').innerHTML = 'Game started! Make your move.';
+            opponent = data.players.find(player => player !== currentPlayer);
+            updatePlayerAreas();
+            document.getElementById('game_buttons').style.display = 'block';
+        });
+        socket.on('game_result', function(data) {
+            document.getElementById('result').innerHTML = 'Result: ' + data.result + '<br>' +
+                'Choices: ' + JSON.stringify(data.choices);
+        });
+        socket.on('update_scores', function(scores) {
+            var scoresHtml = 'Scores: ';
+            for (var player in scores) {
+                scoresHtml += player + ': ' + scores[player] + ' | ';
+                if (lastScores[player] !== undefined && scores[player] > lastScores[player]) {
+                    if (player === currentPlayer) {
+                        shootConfetti();
+                    }
+                }
+            }
+            lastScores = {...scores};
+            document.getElementById('scores').innerHTML = scoresHtml;
+        });
+        socket.on('game_over', function(data) {
+            alert(data.winner + ' wins the game!');
+            document.getElementById('game_buttons').style.display = 'none';
+        });
+        function makeMove(choice) {
+            socket.emit('make_move', {username: currentPlayer, room: '{{ room }}', choice: choice});
+        }
+        function updatePlayerAreas() {
+            document.getElementById('player1-name').innerText = currentPlayer;
+            document.getElementById('player2-name').innerText = opponent;
+        }
+        function shootConfetti() {
+            var end = Date.now() + (3 * 1000);
+
+            var colors = ['#ff0000', '#00ff00', '#0000ff'];
+
+            (function frame() {
+                confetti({
+                    particleCount: 2,
+                    angle: 60,
+                    spread: 55,
+                    origin: { x: 0 },
+                    colors: colors
+                });
+                confetti({
+                    particleCount: 2,
+                    angle: 120,
+                    spread: 55,
+                    origin: { x: 1 },
+                    colors: colors
+                });
+
+                if (Date.now() < end) {
+                    requestAnimationFrame(frame);
+                }
+            }());
+        }
+        function initAudio() {
+            if (!musicInitialized) {
+                bgMusic = new Audio('/static/Sakura-Girl-Yay-chosic.com_.mp3');
+                bgMusic.loop = true;
+                bgMusic.volume = 0.5; // Set volume to 50%
+                musicInitialized = true;
+            }
+            bgMusic.play().then(() => {
+                updateMusicButton();
+            }).catch((error) => {
+                console.log("Autoplay prevented:", error);
+                updateMusicButton();
+            });
+        }
+
+        function toggleMusic() {
+            if (!musicInitialized) {
+                initAudio();
+            } else if (bgMusic.paused) {
+                bgMusic.play();
+            } else {
+                bgMusic.pause();
+            }
+            updateMusicButton();
+        }
+
+        function updateMusicButton() {
+            document.getElementById('musicToggle').textContent = (bgMusic && !bgMusic.paused) ? 'Pause Music' : 'Play Music';
+        }
+
+        window.onload = function() {
+            updateMusicButton();
+            // ... (any other onload functions you might have)
+        };
+
+        // ... (keep the existing functions) ...
+    </script>
+</head>
+<body>
+    <div id="musicControls">
+        <button id="musicToggle" onclick="toggleMusic()">Play Music</button>
+    </div>
+    <div class="game-container">
+        <div id="scores">Scores: </div>
+        <div class="player-area" id="player1-area">
+            <div class="player-content">
+                <h2 id="player1-name">Player 1</h2>
+                <div id="game_buttons" style="display: none;">
+                    <button onclick="makeMove('rock')">Rock</button>
+                    <button onclick="makeMove('paper')">Paper</button>
+                    <button onclick="makeMove('scissors')">Scissors</button>
+                </div>
+            </div>
+        </div>
+        <div class="divider"></div>
+        <div class="player-area" id="player2-area">
+            <div class="player-content">
+                <h2 id="player2-name">Player 2</h2>
+            </div>
+        </div>
+    </div>
+    <div id="status" style="position: absolute; top: 10px; left: 10px;">Waiting for another player...</div>
+    <div id="result" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);"></div>
+</body>
+</html>
