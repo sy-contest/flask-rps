@@ -176,6 +176,8 @@
         var musicInitialized = false;
         var playerChoice = null;
         var timerInterval;
+        var earnPointSound;
+        var losePointSound;
 
         socket.on('connect', function() {
             socket.emit('join', {username: currentPlayer, room: '{{ room }}'});
@@ -207,9 +209,14 @@
             var scoresHtml = 'Scores: ';
             for (var player in scores) {
                 scoresHtml += player + ': ' + scores[player] + ' | ';
-                if (lastScores[player] !== undefined && scores[player] > lastScores[player]) {
-                    if (player === currentPlayer) {
-                        shootConfetti();
+                if (lastScores[player] !== undefined) {
+                    if (scores[player] > lastScores[player]) {
+                        if (player === currentPlayer) {
+                            shootConfetti();
+                            earnPointSound.play();
+                        } else {
+                            losePointSound.play();
+                        }
                     }
                 }
             }
@@ -300,6 +307,8 @@
                 bgMusic = new Audio('/static/Sakura-Girl-Yay-chosic.com_.mp3');
                 bgMusic.loop = true;
                 bgMusic.volume = 0.5; // Set volume to 50%
+                earnPointSound = new Audio('/static/EarnPoint.mp3');
+                losePointSound = new Audio('/static/LosePoint.mp3');
                 musicInitialized = true;
             }
             bgMusic.play().then(() => {
@@ -348,7 +357,7 @@
         }
 
         window.onload = function() {
-            initAudio(); // Add this line to start playing music on page load
+            initAudio(); // This will now initialize all audio elements
             updateMusicButton();
             // ... (any other onload functions you might have)
         };
