@@ -71,6 +71,7 @@
         var lastScores = {};
         var bgMusic;
         var musicInitialized = false;
+        var playerChoice = null;
 
         socket.on('connect', function() {
             socket.emit('join', {username: currentPlayer, room: '{{ room }}'});
@@ -87,10 +88,12 @@
             opponent = data.players.find(player => player !== currentPlayer);
             updatePlayerAreas();
             document.getElementById('game_buttons').style.display = 'block';
+            resetButtons();
         });
         socket.on('game_result', function(data) {
             document.getElementById('result').innerHTML = 'Result: ' + data.result + '<br>' +
                 'Choices: ' + JSON.stringify(data.choices);
+            resetButtons();
         });
         socket.on('update_scores', function(scores) {
             var scoresHtml = 'Scores: ';
@@ -110,7 +113,16 @@
             document.getElementById('game_buttons').style.display = 'none';
         });
         function makeMove(choice) {
-            socket.emit('make_move', {username: currentPlayer, room: '{{ room }}', choice: choice});
+            if (playerChoice !== null) {
+                alert("You've already made your choice for this round!");
+                return;
+            }
+
+            if (confirm(`Are you sure you want to choose ${choice}?`)) {
+                playerChoice = choice;
+                socket.emit('make_move', {username: currentPlayer, room: '{{ room }}', choice: choice});
+                updateButtons(choice);
+            }
         }
         function updatePlayerAreas() {
             document.getElementById('player1-name').innerText = currentPlayer;
@@ -170,6 +182,28 @@
 
         function updateMusicButton() {
             document.getElementById('musicToggle').textContent = (bgMusic && !bgMusic.paused) ? 'Pause Music' : 'Play Music';
+        }
+
+        function updateButtons(selectedChoice) {
+            const buttons = document.querySelectorAll('#game_buttons button');
+            buttons.forEach(button => {
+                if (button.textContent.toLowerCase() === selectedChoice) {
+                    button.style.backgroundColor = '#4CAF50';  // Green for selected choice
+                } else {
+                    button.disabled = true;
+                    button.style.opacity = '0.5';
+                }
+            });
+        }
+
+        function resetButtons() {
+            playerChoice = null;
+            const buttons = document.querySelectorAll('#game_buttons button');
+            buttons.forEach(button => {
+                button.disabled = false;
+                button.style.opacity = '1';
+                button.style.backgroundColor = '#8B89E6';  // Reset to original color
+            });
         }
 
         window.onload = function() {
