@@ -38,10 +38,6 @@ This is an online multiplayer Rock Paper Scissors game where players can create 
 - Use the "Play Music" / "Pause Music" button to control background music
 - Use the "Mute SFX" / "Unmute SFX" button to control sound effects
 
-## Installation and Setup
-
-(Add instructions for setting up the project locally, including any environment variables or configuration needed)
-
 ## Known Issues
 
 - The game works perfectly on local machines but may experience issues when deployed to a live website. We are currently investigating this discrepancy.
