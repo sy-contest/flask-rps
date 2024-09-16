@@ -1,10 +1,9 @@
-<!-- game.html -->
 <!DOCTYPE html>
 <html>
 <head>
     <title>Rock Paper Scissors Game</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://js.pusher.com/7.0/pusher.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <style>
         body {
@@ -185,7 +184,10 @@
         }
     </style>
     <script type="text/javascript" charset="utf-8">
-        var socket = io();
+        var pusher = new Pusher('{{ pusher_key }}', {
+            cluster: '{{ pusher_cluster }}'
+        });
+        var channel = pusher.subscribe('{{ room }}');
         var currentPlayer = '{{ username }}';
         var opponent = '';
         var lastScores = {};
@@ -197,17 +199,56 @@
         var losePointSound;
         var sfxMuted = false;
 
-        socket.on('connect', function() {
-            socket.emit('join', {username: currentPlayer, room: '{{ room }}'});
+        function joinGame() {
+            fetch('/join', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({username: currentPlayer, room: '{{ room }}'}),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'error') {
+                    alert(data.message);
+                    window.location.href = '/';
+                } else {
+                    console.log('Joined game:', data);
+                    if (data.players.length === 2) {
+                        opponent = data.players.find(player => player !== currentPlayer);
+                        updatePlayerAreas();
+                        // Start the game for both players
+                        startGame(data.players);
+                    }
+                }
+            });
+        }
+
+        function startGame(players) {
+            document.getElementById('status').innerHTML = 'Game started! Make your move.';
+            document.getElementById('game_buttons').style.display = 'block';
+            resetButtons();
+            startTimer();
+        }
+
+        channel.bind('player_joined', function(data) {
+            console.log('Player joined:', data.username);
+            if (data.players.length === 2) {
+                opponent = data.players.find(player => player !== currentPlayer);
+                updatePlayerAreas();
+            }
         });
-        socket.on('status', function(data) {
+
+        channel.bind('status', function(data) {
             document.getElementById('status').innerHTML = data.msg;
         });
-        socket.on('room_full', function() {
+
+        channel.bind('room_full', function() {
             alert('This room is full. Please choose another room.');
             window.location.href = '/';
         });
-        socket.on('start_game', function(data) {
+
+        channel.bind('start_game', function(data) {
             document.getElementById('status').innerHTML = 'Game started! Make your move.';
             opponent = data.players.find(player => player !== currentPlayer);
             updatePlayerAreas();
@@ -215,15 +256,17 @@
             resetButtons();
             startTimer();
         });
-        socket.on('game_result', function(data) {
-            clearInterval(timerInterval); // Stop the timer
+
+        channel.bind('game_result', function(data) {
+            clearInterval(timerInterval);
             document.getElementById('result').innerHTML = 'Result: ' + data.result + '<br>' +
                 'Choices: ' + JSON.stringify(data.choices);
             resetButtons();
             playerChoice = null;
             console.log('Game result received, waiting for start_round event');
         });
-        socket.on('update_scores', function(scores) {
+
+        channel.bind('update_scores', function(scores) {
             var scoresHtml = 'Scores: ';
             for (var player in scores) {
                 scoresHtml += player + ': ' + scores[player] + ' | ';
@@ -245,17 +288,20 @@
             lastScores = {...scores};
             document.getElementById('scores').innerHTML = scoresHtml;
         });
-        socket.on('game_over', function(data) {
-            clearInterval(timerInterval); // Ensure timer is stopped when game ends
+
+        channel.bind('game_over', function(data) {
+            clearInterval(timerInterval);
             alert(data.winner + ' wins the game!');
             document.getElementById('game_buttons').style.display = 'none';
         });
-        socket.on('start_round', function() {
+
+        channel.bind('start_round', function() {
             console.log('Start round event received');
             resetButtons();
             playerChoice = null;
             startTimer();
         });
+
         function makeMove(choice) {
             if (playerChoice !== null) {
                 alert("You've already made your choice for this round!");
@@ -263,9 +309,16 @@
             }
 
             playerChoice = choice;
-            socket.emit('make_move', {username: currentPlayer, room: '{{ room }}', choice: playerChoice});
+            fetch('/make_move', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({username: currentPlayer, room: '{{ room }}', choice: playerChoice}),
+            });
             updateButtons(playerChoice);
         }
+
         function startTimer() {
             console.log('Starting timer');
             let timeLeft = 30;
@@ -278,26 +331,36 @@
                 if (timeLeft <= 0) {
                     clearInterval(timerInterval);
                     if (playerChoice === null) {
-                        socket.emit('no_choice', {username: currentPlayer, room: '{{ room }}'});
+                        fetch('/no_choice', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({username: currentPlayer, room: '{{ room }}'}),
+                        });
                     }
                     console.log('Timer reached 0, waiting for server response');
                 }
             }, 1000);
         }
+
         function updateTimerDisplay(time) {
             const minutes = Math.floor(time / 60);
             const seconds = time % 60;
             document.getElementById('timer').textContent = 
                 `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }
+
         function updateTimerBar(currentTime, totalTime) {
             const percentage = (currentTime / totalTime) * 100;
             document.getElementById('timer-bar').style.width = `${percentage}%`;
         }
+
         function updatePlayerAreas() {
             document.getElementById('player1-name').innerText = currentPlayer;
-            document.getElementById('player2-name').innerText = opponent;
+            document.getElementById('player2-name').innerText = opponent || 'Waiting for opponent...';
         }
+
         function shootConfetti() {
             var end = Date.now() + (3 * 1000);
 
@@ -324,11 +387,12 @@
                 }
             }());
         }
+
         function initAudio() {
             if (!musicInitialized) {
                 bgMusic = new Audio('/static/Sakura-Girl-Yay-chosic.com_.mp3');
                 bgMusic.loop = true;
-                bgMusic.volume = 0.5; // Set volume to 50%
+                bgMusic.volume = 0.5;
                 earnPointSound = new Audio('/static/EarnPoint.mp3');
                 losePointSound = new Audio('/static/LosePoint.mp3');
                 musicInitialized = true;
@@ -371,7 +435,7 @@
             const buttons = document.querySelectorAll('#game_buttons button');
             buttons.forEach(button => {
                 if (button.textContent.toLowerCase() === selectedChoice) {
-                    button.style.backgroundColor = '#4CAF50';  // Green for selected choice
+                    button.style.backgroundColor = '#4CAF50';
                 } else {
                     button.disabled = true;
                     button.style.opacity = '0.5';
@@ -385,18 +449,17 @@
             buttons.forEach(button => {
                 button.disabled = false;
                 button.style.opacity = '1';
-                button.style.backgroundColor = '#8B89E6';  // Reset to original color
+                button.style.backgroundColor = '#8B89E6';
             });
         }
 
         window.onload = function() {
-            initAudio(); // This will now initialize all audio elements
+            initAudio();
             updateMusicButton();
             updateSFXButton();
-            // ... (any other onload functions you might have)
+            updatePlayerAreas();
+            joinGame();
         };
-
-        // ... (keep the existing functions) ...
     </script>
 </head>
 <body>

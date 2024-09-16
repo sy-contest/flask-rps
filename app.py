@@ -1,11 +1,22 @@
 from flask import Flask, render_template, request, session, send_from_directory
-from flask_socketio import SocketIO, join_room, leave_room, emit
-import random
+import pusher
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app)
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'secret!')
+
+# Initialize Pusher client
+pusher_client = pusher.Pusher(
+    app_id=os.getenv('PUSHER_APP_ID'),
+    key=os.getenv('PUSHER_KEY'),
+    secret=os.getenv('PUSHER_SECRET'),
+    cluster=os.getenv('PUSHER_CLUSTER'),
+    ssl=True
+)
 
 games = {}
 
@@ -17,52 +28,60 @@ def index():
         if room in games and len(games[room]['players']) >= 2:
             return "Room is full. Please choose another room."
         session['username'] = username
-        return render_template('game.html', username=username, room=room)
+        session['room'] = room
+        return render_template('game.html', 
+                               username=username, 
+                               room=room, 
+                               pusher_key=os.getenv('PUSHER_KEY'),
+                               pusher_cluster=os.getenv('PUSHER_CLUSTER'))
     return render_template('index.html')
 
-@socketio.on('join')
-def on_join(data):
-    username = data['username']
-    room = data['room']
+@app.route('/join', methods=['POST'])
+def join():
+    username = session.get('username')
+    room = session.get('room')
     if room not in games:
         games[room] = {'players': [], 'choices': {}, 'scores': {}}
     if len(games[room]['players']) >= 2:
-        emit('room_full')
-        return
-    join_room(room)
-    games[room]['players'].append(username)
-    games[room]['scores'][username] = 0
-    emit('status', {'msg': f'{username} has joined the room.'}, room=room)
-    emit('update_scores', games[room]['scores'], room=room)
+        pusher_client.trigger(room, 'room_full', {})
+        return {'status': 'error', 'message': 'Room is full'}
+    if username not in games[room]['players']:
+        games[room]['players'].append(username)
+        games[room]['scores'][username] = 0
+    pusher_client.trigger(room, 'player_joined', {'username': username, 'players': games[room]['players']})
+    pusher_client.trigger(room, 'update_scores', games[room]['scores'])
     if len(games[room]['players']) == 2:
-        emit('start_game', {'players': games[room]['players']}, room=room)
+        pusher_client.trigger(room, 'start_game', {'players': games[room]['players']})
+    return {'status': 'success', 'players': games[room]['players']}
 
-@socketio.on('make_move')
-def on_move(data):
-    username = data['username']
-    room = data['room']
-    choice = data['choice']
+@app.route('/make_move', methods=['POST'])
+def make_move():
+    username = session.get('username')
+    room = session.get('room')
+    choice = request.json['choice']
     games[room]['choices'][username] = choice
     if len(games[room]['choices']) == 2:
         process_round(room)
     elif len(games[room]['choices']) == 1 and games[room].get('timer_ended', False):
         process_round(room)
+    return {'status': 'success'}
 
-@socketio.on('no_choice')
-def on_no_choice(data):
-    username = data['username']
-    room = data['room']
+@app.route('/no_choice', methods=['POST'])
+def no_choice():
+    username = session.get('username')
+    room = session.get('room')
     games[room]['timer_ended'] = True
     if len(games[room]['choices']) == 1:
         process_round(room)
     elif len(games[room]['choices']) == 0:
         result = {'result': 'Tie! No one made a choice.', 'choices': {}, 'winner': None}
-        emit('game_result', result, room=room)
-        emit('update_scores', games[room]['scores'], room=room)
+        pusher_client.trigger(room, 'game_result', result)
+        pusher_client.trigger(room, 'update_scores', games[room]['scores'])
         games[room]['choices'] = {}
         games[room]['timer_ended'] = False
         if not check_game_end(room):
-            socketio.emit('start_round', room=room)
+            pusher_client.trigger(room, 'start_round', {})
+    return {'status': 'success'}
 
 def process_round(room):
     if len(games[room]['choices']) == 2:
@@ -72,12 +91,12 @@ def process_round(room):
         result = {'result': f'{player_who_chose} wins! The other player didn\'t choose.', 'choices': games[room]['choices'], 'winner': player_who_chose}
     
     update_scores(room, result)
-    emit('game_result', result, room=room)
-    emit('update_scores', games[room]['scores'], room=room)
+    pusher_client.trigger(room, 'game_result', result)
+    pusher_client.trigger(room, 'update_scores', games[room]['scores'])
     games[room]['choices'] = {}
     games[room]['timer_ended'] = False
     if not check_game_end(room):
-        socketio.emit('start_round', room=room)
+        pusher_client.trigger(room, 'start_round', {})
 
 def determine_winner(choices):
     players = list(choices.keys())
@@ -98,9 +117,9 @@ def update_scores(room, result):
 def check_game_end(room):
     for player, score in games[room]['scores'].items():
         if score >= 3:
-            emit('game_over', {'winner': player}, room=room)
+            pusher_client.trigger(room, 'game_over', {'winner': player})
             games[room]['scores'] = {p: 0 for p in games[room]['scores']}
-            emit('update_scores', games[room]['scores'], room=room)
+            pusher_client.trigger(room, 'update_scores', games[room]['scores'])
             return True
     return False
 
@@ -110,4 +129,4 @@ def send_static(path):
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port)
